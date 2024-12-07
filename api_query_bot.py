@@ -6,7 +6,8 @@ from fuzzywuzzy import fuzz, process
 from nltk.stem.porter import PorterStemmer
 import pandas as pd
 import google.generativeai as genai
-import os 
+import os
+import string
 
 app = FastAPI()
 
@@ -59,8 +60,13 @@ def fetch_gemini_answer(question):
     response = model.generate_content(f"Answer the following question: {question}")
     return response.text
 
+def clean_query(user_query):
+    user_query = user_query.strip().rstrip(string.punctuation)
+    return user_query
+
 def query_bot(user_query, threshold=0.5):
-    corrected_query = correct_spelling(user_query)
+    cleaned_query = clean_query(user_query)
+    corrected_query = correct_spelling(cleaned_query)
     stemmed_query = stem(corrected_query)
     user_query_vector = vectorizer.transform([stemmed_query])
     similarities = cosine_similarity(user_query_vector, question_vectors).flatten()
@@ -70,9 +76,9 @@ def query_bot(user_query, threshold=0.5):
     if max_similarity >= threshold:
         return {"answer": answers[best_match_idx]}
     else:
-        if postoffice_related(user_query):
-            gemini_answer = fetch_gemini_answer(user_query)
-            dataset[user_query] = gemini_answer
+        if postoffice_related(cleaned_query):
+            gemini_answer = fetch_gemini_answer(cleaned_query)
+            dataset[cleaned_query] = gemini_answer
             updated_df = pd.DataFrame(dataset.items(), columns=["QUESTIONS", "ANSWERS"])
             updated_df.to_csv("ques_ans.csv", index=False)
             return {"answer": gemini_answer}
@@ -90,3 +96,4 @@ def root():
 def query(query: Query):
     response = query_bot(query.question)
     return response
+
